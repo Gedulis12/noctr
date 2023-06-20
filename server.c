@@ -49,11 +49,12 @@ int main(void)
 
 void *get_in_addr(struct sockaddr *sa)
 {
+    // if IPV4
     if (sa->sa_family == AF_INET)
     {
         return &(((struct sockaddr_in*)sa)->sin_addr);
     }
-
+    // if IPV6
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
@@ -189,6 +190,7 @@ void cleanup_client(struct client_data *client)
     free(client);
 }
 
+// Check if the message received is HTTP WebSocket handshake request
 int is_websocket_request(const char *request)
 {
     const char *upgrade_header = "Upgrade: websocket\r\n";
@@ -198,35 +200,54 @@ int is_websocket_request(const char *request)
     const char *upgrade_ptr = strstr(request, upgrade_header);
     if (!upgrade_ptr)
     {
+        printf("Upgrade header not found\n");
         return 0;
     }
 
     const char *connection_ptr = strstr(request, connection_header);
     if (!connection_ptr)
     {
+        printf("Connection header not found\n");
+        return 0;
+    }
+
+    connection_ptr += strlen(connection_header);
+    // Check if "Upgrade" is present in the Connection header value
+    const char *upgrade_str = "Upgrade";
+    const char *upgrade_start = strstr(connection_ptr, upgrade_str);
+
+    if (!upgrade_start)
+    {
+        printf("Connection header does not contain required value: 'Upgrade'\n");
         return 0;
     }
 
     if (upgrade_ptr < connection_ptr)
     {
+        printf("Upgrade and connection headers are in the wrong order\n");
         return 0;
     }
 
     const char *key_ptr = strstr(request, key_header);
     if (!key_ptr)
+    {
+        printf("Key header not found\n");
         return 0;
+    }
 
     return 1;
 }
 
 void send_websocket_handshake_response(int sockfd, const char* request)
 {
+    // Handshake response template
     const char *response_template = "HTTP/1.1 101 Switching Protocols\r\n"
                                     "Upgrade: websocket\r\n"
                                     "Connection: Upgrade\r\n"
                                     "Sec-WebSocket-Accept: %s\r\n"
                                     "\r\n";
 
+    // Header to parse from the request
     const char *key_header = "Sec-WebSocket-Key:";
     const char *key_start = strstr(request, key_header);
 
@@ -249,6 +270,7 @@ void send_websocket_handshake_response(int sockfd, const char* request)
     strncpy(request_key, key_start, key_length);
     request_key[key_length] = '\0';
 
+    // Concatenate the key from the header with the MAGIC_STRING (WebSocket spec)
     size_t concatenated_key_length = key_length + strlen(MAGIC_STRING) + 1;
     char *concatenated_key = (char *)malloc(concatenated_key_length);
 
@@ -257,6 +279,7 @@ void send_websocket_handshake_response(int sockfd, const char* request)
 
     printf("\nConcatenated string: %s\n", concatenated_key);
 
+    // Get SHA1 hash of the concatenated string (WebSocket spwc)
     concatenated_key_length = strlen(concatenated_key);
     unsigned char hash[SHA_DIGEST_LENGTH];
     SHA1((unsigned char *)concatenated_key, concatenated_key_length, hash);
@@ -269,12 +292,26 @@ void send_websocket_handshake_response(int sockfd, const char* request)
         i ++;
     }
     printf("\n");
+
+    // Base64 encode the SHA1 hash (WebSocket spec)
     char encoded_hash[SHA_DIGEST_LENGTH * 2];
     base64_encode(hash, SHA_DIGEST_LENGTH, encoded_hash);
     printf("Base64 encoded hash: %s\n", encoded_hash);
+
+    // Append the base64 encoded value to the HTTP header
+    size_t response_length = strlen(response_template) + strlen(encoded_hash) + 1;
+    char* response = (char*)malloc(response_length);
+    snprintf(response, response_length, response_template, encoded_hash);
+    printf("Response:\n%s\n", response);
+
+    if (send(sockfd, response, response_length, 0) == 0)
+    {
+        perror("send");
+    }
+
     free(request_key);
     free(concatenated_key);
-
+    free(response);
 }
 
 void base64_encode(const unsigned char *input, size_t input_length, char *output)
