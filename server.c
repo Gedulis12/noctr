@@ -73,6 +73,7 @@ void *handle_client(void *arg)
 {
     struct client_data *client = (struct client_data *)arg;
     client->ws_est = 0;
+    int status;
     char s[INET6_ADDRSTRLEN];
     char buf[BUFFER_SIZE];
     int numbytes;
@@ -84,14 +85,20 @@ void *handle_client(void *arg)
     {
         buf[numbytes] = '\0';
 
-        if (client->ws_est == 0 && is_websocket_request(buf) == 1)
+        if (client->ws_est != 1)
         {
-            if (send_websocket_handshake_response(client->sockfd, buf) == 0)
+            if(is_websocket_request(buf) == 1)
             {
-                client->ws_est = 1;
+                if ((status = send_websocket_handshake_response(client->sockfd, buf)) == 0)
+                {
+                    client->ws_est = 1;
+                }
+                printf("send websocket response return status: %d\n", status);
             }
         }
+        printf("ws_est value %d\n:", client->ws_est);
         printf("Received: %s\n", buf);
+        read_ws_frame(buf);
     }
 
     if (numbytes == 0)
@@ -269,8 +276,8 @@ int send_websocket_handshake_response(int sockfd, const char* request)
 
     if (key_start == NULL) 
     {
-    printf("Invalid WebSocket request\n");
-    return 1;
+        printf("Invalid WebSocket request\n");
+        return 1;
     }
 
     key_start += strlen(key_header);
@@ -320,7 +327,7 @@ int send_websocket_handshake_response(int sockfd, const char* request)
     snprintf(response, response_length, response_template, encoded_hash);
     printf("Response:\n%s\n", response);
 
-    if (send(sockfd, response, response_length, 0) == 0)
+    if (send(sockfd, response, response_length, 0) != 0)
     {
         free(request_key);
         free(concatenated_key);
@@ -345,14 +352,20 @@ void base64_encode(const unsigned char *input, size_t input_length, char *output
 }
 
 
-void read_ws_frame(const char *frame)
+void read_ws_frame(const  char *frame)
 {
     struct ws_frame ws_frame;
+    unsigned char opcode;
+    unsigned char mask_set;
+    int mask_start; // byte number at which the mask starts
+    int payload_start; // byte number at which the payload starts;
+    unsigned char payload_length;
     // check if fin bit is 1 and reserved bits are 0
     // bitwise AND the first 4 bits of first byte with 11110000 (240)
-    if ((frame[0] & 240) != 240)
+    if ((frame[0] & 240) != 128)
     {
-        printf("Issue with Fin and reserved bits\n");
+        printf("Issue with Fin and reserved bits:\n");
+        printf("%d\n", (frame[0] & 240));
         return;
     }
 
@@ -360,7 +373,7 @@ void read_ws_frame(const char *frame)
     // bitwise AND the last 4 bits of the first byte with 0000 1111 (15)
     // 0001 (1) for text, 0010 (2) for binary, 1000 (8) to close the connection
     // the server only supports text and connection close types;
-    unsigned char opcode = frame[0] & 15;
+    opcode = frame[0] & 15;
     if (opcode == 1)
     {
         ws_frame.fin_rsv_opcode = 129; // 1000 0001
@@ -371,21 +384,30 @@ void read_ws_frame(const char *frame)
     }
     else
     {
-        printf("the received opcode is not supported");
+        printf("the received opcode is not supported\n");
         return;
     }
+    printf("opcode: %d\n", ws_frame.fin_rsv_opcode);
 
     // check if the mask is applied
     // bitwise AND the first bit of the second byte with 1000 0000 (128)
-    unsigned char mask_set = frame[1] & 128;
+     mask_set = frame[1] & 128;
+     printf("mask bit: %d\n", mask_set);
 
     // check the payload length
     // bitwise AND the last 7 bits of the second byte with 0111 1111 (127)
 
-    unsigned char payload_length = frame[1] & 127;
+    payload_length = frame[1] & 127;
     if (payload_length < 126)
     {
         ws_frame.mask_length = mask_set | payload_length;
+
+        // set a byte at which the masking-key starts;
+        if (mask_set == 128)
+        {
+            mask_start = 2;
+            payload_start = mask_start + 4;
+        }
     }
     // if the payload length is >= 126 read the next two bits as the length
     // we combine the bytes of frame[2] and frame[3] by byt-shifting frame[2] to the left by eight places and applying bitwise or with the frame[3]
@@ -394,12 +416,29 @@ void read_ws_frame(const char *frame)
         ws_frame.mask_length = mask_set | payload_length;
         ws_frame.payload_len = ((unsigned short)frame[2] << 8) | frame[3];
 
+        if (mask_set == 128)
+        {
+            mask_start = 4;
+            payload_start = mask_start + 4;
+        }
         // messages above the BUFFER_SIZE - 8 are not allowed (8 bytes are reserved for the WebSocket frame headers)
         if (ws_frame.payload_len > (BUFFER_SIZE - 8))
         {
-            printf("Message above the %d are not allowed", (BUFFER_SIZE - 8));
+            printf("Message above the %d are not allowed\n", (BUFFER_SIZE - 8));
             return;
         }
     }
+    printf("mask_len: %d\n", ws_frame.mask_length);
+    printf("actual payload length: %d\n", (ws_frame.mask_length & 127));
+    printf("payload len: %d\n", ws_frame.payload_len);
 
+    // assign the masking key bytes to the ws_frame.masking_key
+    if (mask_set == 128)
+    {
+            for (int i = 0; i < 4; i++)
+            {
+                ws_frame.masking_key[i] = frame[(mask_start + i)];
+                printf("masking key #%d: %d\n", i, ws_frame.masking_key[i]);
+            }
+    }
 }
