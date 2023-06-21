@@ -24,6 +24,14 @@ struct client_data
     short int ws_est; // 1 - if the websocket connection is established, 0 - if websocket connection is not established
 };
 
+struct ws_frame
+{
+    unsigned char fin_rsv_opcode;
+    unsigned char mask_length;
+    unsigned short payload_len;
+    unsigned char masking_key[4];
+    unsigned char *payload;
+};
 
 void *get_in_addr(struct sockaddr *sa);
 void *handle_client(void *arg);
@@ -33,6 +41,7 @@ void cleanup_client(struct client_data *client);
 int is_websocket_request(const char *request);
 int send_websocket_handshake_response(int sockfd, const char *request);
 void base64_encode(const unsigned char *input, size_t input_length, char *output);
+void read_ws_frame(const char *frame);
 
 
 int main(void)
@@ -201,7 +210,7 @@ void cleanup_client(struct client_data *client)
 int is_websocket_request(const char *request)
 {
     const char *upgrade_header = "Upgrade: websocket\r\n";
-    const char *connection_header = "Connection: Upgrade\r\n";
+    const char *connection_header = "Connection: ";
     const char *key_header = "Sec-WebSocket-Key";
 
     const char *upgrade_ptr = strstr(request, upgrade_header);
@@ -261,7 +270,7 @@ int send_websocket_handshake_response(int sockfd, const char* request)
     if (key_start == NULL) 
     {
     printf("Invalid WebSocket request\n");
-    return;
+    return 1;
     }
 
     key_start += strlen(key_header);
@@ -333,4 +342,64 @@ void base64_encode(const unsigned char *input, size_t input_length, char *output
     EVP_EncodeUpdate(ctx, (unsigned char *)output, &output_length, input, input_length);
     EVP_EncodeFinal(ctx, (unsigned char *)&output[output_length], &output_length);
     EVP_ENCODE_CTX_free(ctx);
+}
+
+
+void read_ws_frame(const char *frame)
+{
+    struct ws_frame ws_frame;
+    // check if fin bit is 1 and reserved bits are 0
+    // bitwise AND the first 4 bits of first byte with 11110000 (240)
+    if ((frame[0] & 240) != 240)
+    {
+        printf("Issue with Fin and reserved bits\n");
+        return;
+    }
+
+    // check the opcode (message type)
+    // bitwise AND the last 4 bits of the first byte with 0000 1111 (15)
+    // 0001 (1) for text, 0010 (2) for binary, 1000 (8) to close the connection
+    // the server only supports text and connection close types;
+    unsigned char opcode = frame[0] & 15;
+    if (opcode == 1)
+    {
+        ws_frame.fin_rsv_opcode = 129; // 1000 0001
+    }
+    else if (opcode == 8)
+    {
+        ws_frame.fin_rsv_opcode = 136; // 1000 1000
+    }
+    else
+    {
+        printf("the received opcode is not supported");
+        return;
+    }
+
+    // check if the mask is applied
+    // bitwise AND the first bit of the second byte with 1000 0000 (128)
+    unsigned char mask_set = frame[1] & 128;
+
+    // check the payload length
+    // bitwise AND the last 7 bits of the second byte with 0111 1111 (127)
+
+    unsigned char payload_length = frame[1] & 127;
+    if (payload_length < 126)
+    {
+        ws_frame.mask_length = mask_set | payload_length;
+    }
+    // if the payload length is >= 126 read the next two bits as the length
+    // we combine the bytes of frame[2] and frame[3] by byt-shifting frame[2] to the left by eight places and applying bitwise or with the frame[3]
+    else if (payload_length >= 126)
+    {
+        ws_frame.mask_length = mask_set | payload_length;
+        ws_frame.payload_len = ((unsigned short)frame[2] << 8) | frame[3];
+
+        // messages above the BUFFER_SIZE - 8 are not allowed (8 bytes are reserved for the WebSocket frame headers)
+        if (ws_frame.payload_len > (BUFFER_SIZE - 8))
+        {
+            printf("Message above the %d are not allowed", (BUFFER_SIZE - 8));
+            return;
+        }
+    }
+
 }
