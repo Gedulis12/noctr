@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -360,6 +361,8 @@ void read_ws_frame(const  char *frame)
     int mask_start; // byte number at which the mask starts
     int payload_start; // byte number at which the payload starts;
     unsigned char payload_length;
+    int len;
+    int mask_idx = 0;
     // check if fin bit is 1 and reserved bits are 0
     // bitwise AND the first 4 bits of first byte with 11110000 (240)
     if ((frame[0] & 240) != 128)
@@ -401,12 +404,12 @@ void read_ws_frame(const  char *frame)
     if (payload_length < 126)
     {
         ws_frame.mask_length = mask_set | payload_length;
+        ws_frame.payload_len = 0;
 
         // set a byte at which the masking-key starts;
         if (mask_set == 128)
         {
             mask_start = 2;
-            payload_start = mask_start + 4;
         }
     }
     // if the payload length is >= 126 read the next two bits as the length
@@ -419,7 +422,6 @@ void read_ws_frame(const  char *frame)
         if (mask_set == 128)
         {
             mask_start = 4;
-            payload_start = mask_start + 4;
         }
         // messages above the BUFFER_SIZE - 8 are not allowed (8 bytes are reserved for the WebSocket frame headers)
         if (ws_frame.payload_len > (BUFFER_SIZE - 8))
@@ -428,6 +430,8 @@ void read_ws_frame(const  char *frame)
             return;
         }
     }
+
+    payload_start = mask_start + 4;
     printf("mask_len: %d\n", ws_frame.mask_length);
     printf("actual payload length: %d\n", (ws_frame.mask_length & 127));
     printf("payload len: %d\n", ws_frame.payload_len);
@@ -441,4 +445,34 @@ void read_ws_frame(const  char *frame)
                 printf("masking key #%d: %d\n", i, ws_frame.masking_key[i]);
             }
     }
+
+    // get the actual length of payload and assign it to 'len'
+    // use ws_frrame.payload_len is not 0 assign it to length, otherwise parse the length from the
+    // second byte by applying bitwise AND with 0111 1111 (127)
+    if (ws_frame.payload_len == 0)
+    {
+        len = (ws_frame.mask_length & 127);
+    }
+    else
+    {
+        len = ws_frame.payload_len;
+    }
+
+    // read the payload data looping over each byte and unmasking it with corresponding mask
+    // unmasking is done by applying bitwise XOR
+    for (int i = 0; i < len; i++)
+    {
+        unsigned char mask = ws_frame.masking_key[mask_idx];
+        unsigned char masked_data = frame[(payload_start + i)];
+        unsigned char unmasked_data = mask ^ masked_data;
+        printf("%c", unmasked_data);
+
+        if (mask_idx != 0 && (mask_idx % 3) == 0)
+        {
+            mask_idx = -1;
+        }
+
+        mask_idx ++;
+    }
+    printf("\n");
 }
