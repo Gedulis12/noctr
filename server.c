@@ -19,9 +19,11 @@
 
 struct client_data
 {
-    int sockfd;
-    struct sockaddr_storage client_addr;
+    int sockfd; // file descriptor for client-server communication
+    struct sockaddr_storage client_addr; // client's ip address
+    short int ws_est; // 1 - if the websocket connection is established, 0 - if websocket connection is not established
 };
+
 
 void *get_in_addr(struct sockaddr *sa);
 void *handle_client(void *arg);
@@ -29,7 +31,7 @@ int setup_server();
 void accept_clients(int sockfd);
 void cleanup_client(struct client_data *client);
 int is_websocket_request(const char *request);
-void send_websocket_handshake_response(int sockfd, const char *request);
+int send_websocket_handshake_response(int sockfd, const char *request);
 void base64_encode(const unsigned char *input, size_t input_length, char *output);
 
 
@@ -61,6 +63,7 @@ void *get_in_addr(struct sockaddr *sa)
 void *handle_client(void *arg)
 {
     struct client_data *client = (struct client_data *)arg;
+    client->ws_est = 0;
     char s[INET6_ADDRSTRLEN];
     char buf[BUFFER_SIZE];
     int numbytes;
@@ -71,9 +74,13 @@ void *handle_client(void *arg)
     while ((numbytes = recv(client->sockfd, buf, BUFFER_SIZE -1, 0)) > 0)
     {
         buf[numbytes] = '\0';
-        if (is_websocket_request(buf) == 1)
+
+        if (client->ws_est == 0 && is_websocket_request(buf) == 1)
         {
-            send_websocket_handshake_response(client->sockfd, buf);
+            if (send_websocket_handshake_response(client->sockfd, buf) == 0)
+            {
+                client->ws_est = 1;
+            }
         }
         printf("Received: %s\n", buf);
     }
@@ -238,7 +245,7 @@ int is_websocket_request(const char *request)
     return 1;
 }
 
-void send_websocket_handshake_response(int sockfd, const char* request)
+int send_websocket_handshake_response(int sockfd, const char* request)
 {
     // Handshake response template
     const char *response_template = "HTTP/1.1 101 Switching Protocols\r\n"
@@ -306,12 +313,16 @@ void send_websocket_handshake_response(int sockfd, const char* request)
 
     if (send(sockfd, response, response_length, 0) == 0)
     {
-        perror("send");
+        free(request_key);
+        free(concatenated_key);
+        free(response);
+        return 0;
     }
 
     free(request_key);
     free(concatenated_key);
     free(response);
+    return 1;
 }
 
 void base64_encode(const unsigned char *input, size_t input_length, char *output)
