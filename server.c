@@ -108,15 +108,16 @@ void *handle_client(void *arg)
 
         if (client->ws_est == 1)
         {
-            if ((read_ws_frame(client, buf, ws_recv)) == 2)
+            if ((status = read_ws_frame(client, buf, ws_recv)) == 2)
             {
                 close(client->sockfd);
                 free(client);
                 pthread_exit(NULL);
             }
-            printf("Received: %s\n", ws_recv);
-            printf("\n----------------\n");
-            send_websocket_frame(client, ws_recv, strlen(ws_recv));
+            if (status == 0)
+            {
+                send_websocket_frame(client, ws_recv, strlen(ws_recv));
+            }
         }
     }
 
@@ -286,8 +287,7 @@ int send_websocket_handshake_response(int sockfd, const char* request)
     const char *response_template = "HTTP/1.1 101 Switching Protocols\r\n"
                                     "Upgrade: websocket\r\n"
                                     "Connection: Upgrade\r\n"
-                                    "Sec-WebSocket-Accept: %s\r\n"
-                                    "\r\n";
+                                    "Sec-WebSocket-Accept: %s\r\n";
 
     // Header to parse from the request
     const char *key_header = "Sec-WebSocket-Key:";
@@ -341,9 +341,16 @@ int send_websocket_handshake_response(int sockfd, const char* request)
     printf("Base64 encoded hash: %s\n", encoded_hash);
 
     // Append the base64 encoded value to the HTTP header
-    size_t response_length = strlen(response_template) + strlen(encoded_hash) + 1;
-    char* response = (char*)malloc(response_length);
-    snprintf(response, response_length, response_template, encoded_hash);
+    char *response = NULL;
+    int response_length = snprintf(NULL, 0, response_template, encoded_hash);
+    if (response_template < 0)
+    {
+        free(request_key);
+        free(concatenated_key);
+        return 1;
+    }
+    response = (char*)malloc(response_length + 1);
+    snprintf(response, response_length + 1, response_template, encoded_hash);
     printf("Response:\n%s\n", response);
 
     if (send(sockfd, response, response_length, 0) != 0)
