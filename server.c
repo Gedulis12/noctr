@@ -95,7 +95,6 @@ void *handle_client(void *arg)
 
         if (client->ws_est != 1)
         {
-            printf("Received: %s\n", buf);
             if(is_websocket_request((const char*)buf) == 1)
             {
                 if ((status = send_websocket_handshake_response(client->sockfd, (const char*)buf)) == 0)
@@ -319,7 +318,6 @@ int send_websocket_handshake_response(int sockfd, const char* request)
     strcpy(concatenated_key, request_key);
     strcat(concatenated_key, MAGIC_STRING);
 
-    printf("\nConcatenated string: %s\n", concatenated_key);
 
     // Get SHA1 hash of the concatenated string (WebSocket spwc)
     concatenated_key_length = strlen(concatenated_key);
@@ -327,18 +325,10 @@ int send_websocket_handshake_response(int sockfd, const char* request)
     SHA1((unsigned char *)concatenated_key, concatenated_key_length, hash);
 
     int i = 0;
-    printf("Hash: ");
-    while(i < SHA_DIGEST_LENGTH)
-    {
-        printf("%02x", hash[i]);
-        i ++;
-    }
-    printf("\n");
 
     // Base64 encode the SHA1 hash (WebSocket spec)
     char encoded_hash[SHA_DIGEST_LENGTH * 2];
     base64_encode(hash, SHA_DIGEST_LENGTH, encoded_hash);
-    printf("Base64 encoded hash: %s\n", encoded_hash);
 
     // Append the base64 encoded value to the HTTP header
     char *response = NULL;
@@ -351,7 +341,6 @@ int send_websocket_handshake_response(int sockfd, const char* request)
     }
     response = (char*)malloc(response_length + 1);
     snprintf(response, response_length + 1, response_template, encoded_hash);
-    printf("Response:\n%s\n", response);
 
     if (send(sockfd, response, response_length, 0) != 0)
     {
@@ -407,12 +396,10 @@ int read_ws_frame(struct client_data *client, const unsigned char *frame, char *
         printf("received opcode: %x is not supported.\n", ws_frame.opcode);
         return 1;
     }
-    printf("opcode: %d\n", ws_frame.opcode);
 
     // check if the mask is applied
     // bitwise AND the first bit of the second byte with 1000 0000 (128)
      ws_frame.mask_bit = frame[1] & 128;
-     printf("mask bit: %d\n", ws_frame.mask_bit);
 
     // check the payload length
     // bitwise AND the last 7 bits of the second byte with 0111 1111 (127)
@@ -445,7 +432,6 @@ int read_ws_frame(struct client_data *client, const unsigned char *frame, char *
     }
 
     ws_frame.payload_start = ws_frame.mask_start + 4;
-    printf("payload length: %d\n", (ws_frame.payload_length));
 
     // assign the masking key bytes to the ws_frame.masking_key
     if (ws_frame.mask_bit == 128)
@@ -453,7 +439,6 @@ int read_ws_frame(struct client_data *client, const unsigned char *frame, char *
             for (int i = 0; i < 4; i++)
             {
                 ws_frame.masking_key[i] = frame[(ws_frame.mask_start + i)];
-                printf("masking key #%d: %d\n", i, ws_frame.masking_key[i]);
             }
     }
 
@@ -490,11 +475,21 @@ int send_websocket_frame(struct client_data *client, const char *payload, size_t
         offset = 2;
         frame_buf[1] = (char)payload_len;
     }
+    else if (payload_len > 126 && payload_len < (BUFFER_SIZE - 4))
+    {
+        offset = 4;
+        frame_buf[2] = (payload_len & 65280);
+        frame_buf[3] = (payload_len & 255);
+    }
+    else 
+    {
+        printf("payload length: %d is not supported\n", payload_len);
+        return 1;
+    }
 
     memcpy(frame_buf + offset, payload, payload_len);
 
     size_t msg_size = offset + payload_len;
-    printf("opcode: %d\n", frame_buf[0] & 15);
 
     write(client->sockfd, frame_buf, msg_size);
 
