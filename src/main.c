@@ -1,5 +1,5 @@
-#include "server.h"
-#include "websocket.h"
+#include "../include/server.h"
+#include "../include/websocket.h"
 
 
 int main(void)

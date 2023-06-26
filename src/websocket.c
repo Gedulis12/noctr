@@ -1,4 +1,5 @@
-#include "websocket.h"
+#include "../include/websocket.h"
+#include "../include/util.h"
 
 
 // Check if the message received is HTTP WebSocket handshake request
@@ -253,15 +254,4 @@ int send_websocket_frame(struct client_data *client, const char *payload, size_t
     write(client->sockfd, frame_buf, msg_size);
 
     return 0;
-}
-
-
-void base64_encode(const unsigned char *input, size_t input_length, char *output)
-{
-    EVP_ENCODE_CTX *ctx = EVP_ENCODE_CTX_new();
-    int output_length;
-    EVP_EncodeInit(ctx);
-    EVP_EncodeUpdate(ctx, (unsigned char *)output, &output_length, input, input_length);
-    EVP_EncodeFinal(ctx, (unsigned char *)&output[output_length], &output_length);
-    EVP_ENCODE_CTX_free(ctx);
 }
