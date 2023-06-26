@@ -5,5 +5,3 @@ My attempt to develop [Nostr](https://github.com/nostr-protocol/nostr) relay ser
 This is not intended to be production grade server, i'm just trying to build it as a learning exercise.
 
 I welcome all comments and suggestions.
-
-Currently building with: `gcc server.c -pthread -lcrypto -o server`

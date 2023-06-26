@@ -1,236 +1,5 @@
-#include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <pthread.h>
-#include <unistd.h>
-#include <stdbool.h>
-#include <openssl/sha.h>
-#include <openssl/evp.h>
-#include <stdint.h>
+#include "websocket.h"
 
-#define PORT "6969"
-#define BACKLOG 10
-#define BUFFER_SIZE 8192
-#define MAGIC_STRING "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-
-struct client_data
-{
-    int sockfd; // file descriptor for client-server communication
-    struct sockaddr_storage client_addr; // client's ip address
-    short int ws_est; // 1 - if the websocket connection is established, 0 - if websocket connection is not established
-};
-
-struct ws_frame
-{
-    short mask_start;
-    short payload_start;
-    short mask_idx;
-    unsigned short payload_length;
-    unsigned char *payload;
-    unsigned char opcode;
-    unsigned char mask_bit;
-    unsigned char masking_key[4];
-    unsigned char fin_rsv;
-};
-
-void *get_in_addr(struct sockaddr *sa);
-void *handle_client(void *arg);
-int setup_server();
-void accept_clients(int sockfd);
-void cleanup_client(struct client_data *client);
-int is_websocket_request(const char *request);
-int send_websocket_handshake_response(int sockfd, const char *request);
-void base64_encode(const unsigned char *input, size_t input_length, char *output);
-int read_ws_frame(struct client_data *client, const unsigned char *frame, char *unmasked_payload);
-int send_websocket_frame(struct client_data *client, const char *payload, size_t payload_len);
-
-
-int main(void)
-{
-    int sockfd = setup_server();
-    if (sockfd == -1)
-    {
-        fprintf(stderr, "Failed to set up the server.\n");
-        return 1;
-    }
-
-    accept_clients(sockfd);
-
-    return 0;
-}
-
-void *get_in_addr(struct sockaddr *sa)
-{
-    // if IPV4
-    if (sa->sa_family == AF_INET)
-    {
-        return &(((struct sockaddr_in*)sa)->sin_addr);
-    }
-    // if IPV6
-    return &(((struct sockaddr_in6*)sa)->sin6_addr);
-}
-
-void *handle_client(void *arg)
-{
-    struct client_data *client = (struct client_data *)arg;
-    client->ws_est = 0;
-    int status;
-    char s[INET6_ADDRSTRLEN];
-    unsigned char buf[BUFFER_SIZE];
-    char ws_recv[BUFFER_SIZE];
-    int numbytes;
-
-    inet_ntop(client->client_addr.ss_family, get_in_addr((struct sockaddr *)&(client->client_addr)), s, sizeof s);
-    printf("server: got a connection from %s\n", s);
-
-    while ((numbytes = recv(client->sockfd, buf, BUFFER_SIZE -1, 0)) > 0)
-    {
-        buf[numbytes] = '\0';
-
-        if (client->ws_est != 1)
-        {
-            if(is_websocket_request((const char*)buf) == 1)
-            {
-                if ((status = send_websocket_handshake_response(client->sockfd, (const char*)buf)) == 0)
-                {
-                    client->ws_est = 1;
-                }
-                printf("send websocket response return status: %d\n", status);
-            }
-        }
-
-        if (client->ws_est == 1)
-        {
-            if ((status = read_ws_frame(client, buf, ws_recv)) == 2)
-            {
-                close(client->sockfd);
-                free(client);
-                pthread_exit(NULL);
-            }
-            if (status == 0)
-            {
-                send_websocket_frame(client, ws_recv, strlen(ws_recv));
-            }
-        }
-    }
-
-    if (numbytes == 0)
-    {
-        printf("client on socket %d disconnected\n", client->sockfd);
-    }
-    else
-    {
-        perror("recv");
-    }
-
-    close(client->sockfd);
-    free(client);
-    pthread_exit(NULL);
-
-}
-
-int setup_server()
-{
-    int sockfd;
-    int rv;
-    struct addrinfo hints, *servinfo, *p;
-    int yes = 1;
-
-    memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE;
-
-    if ((rv = getaddrinfo(NULL, PORT, &hints, &servinfo)) != 0)
-    {
-        fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(rv));
-        return 1;
-    }
-
-    for (p = servinfo; p != NULL; p = p->ai_next)
-    {
-        if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1)
-        {
-            perror("server: socket");
-            continue;
-        }
-
-        if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1)
-        {
-            perror("setsockopt");
-            exit(1);
-        }
-
-        if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1)
-        {
-            perror("server: bind");
-            continue;
-        }
-
-        break;
-    }
-
-
-    freeaddrinfo(servinfo);
-
-    if (p == NULL)
-    {
-        fprintf(stderr, "server: failed to bind\n");
-        exit(1);
-    }
-
-    if (listen(sockfd, BACKLOG) == -1)
-    {
-        perror("listen");
-        exit(1);
-    }
-
-    printf("server: waiting for connections...\n");
-
-    return sockfd;
-}
-
-void accept_clients(int sockfd)
-{
-    pthread_t thread;
-    struct sockaddr_storage client_addr;
-    socklen_t sin_size;
-    int new_fd;
-
-    while (1)
-    {
-        sin_size = sizeof client_addr;
-        new_fd = accept(sockfd, (struct sockaddr *)&client_addr, &sin_size);
-        if (new_fd == -1)
-        {
-            perror("accept");
-            continue;
-        }
-
-        struct client_data *client = (struct client_data *)malloc(sizeof(struct client_data));
-        client->sockfd = new_fd;
-        client->client_addr = client_addr;
-
-        if (pthread_create(&thread, NULL, handle_client, (void *)client) != 0)
-        {
-            perror("pthread create");
-            close(new_fd);
-            free(client);
-        }
-    }
-}
-
-void cleanup_client(struct client_data *client)
-{
-    close(client->sockfd);
-    free(client);
-}
 
 // Check if the message received is HTTP WebSocket handshake request
 int is_websocket_request(const char *request)
@@ -280,6 +49,7 @@ int is_websocket_request(const char *request)
     return 1;
 }
 
+
 int send_websocket_handshake_response(int sockfd, const char* request)
 {
     // Handshake response template
@@ -324,8 +94,6 @@ int send_websocket_handshake_response(int sockfd, const char* request)
     unsigned char hash[SHA_DIGEST_LENGTH];
     SHA1((unsigned char *)concatenated_key, concatenated_key_length, hash);
 
-    int i = 0;
-
     // Base64 encode the SHA1 hash (WebSocket spec)
     char encoded_hash[SHA_DIGEST_LENGTH * 2];
     base64_encode(hash, SHA_DIGEST_LENGTH, encoded_hash);
@@ -354,16 +122,6 @@ int send_websocket_handshake_response(int sockfd, const char* request)
     free(concatenated_key);
     free(response);
     return 1;
-}
-
-void base64_encode(const unsigned char *input, size_t input_length, char *output)
-{
-    EVP_ENCODE_CTX *ctx = EVP_ENCODE_CTX_new();
-    int output_length;
-    EVP_EncodeInit(ctx);
-    EVP_EncodeUpdate(ctx, (unsigned char *)output, &output_length, input, input_length);
-    EVP_EncodeFinal(ctx, (unsigned char *)&output[output_length], &output_length);
-    EVP_ENCODE_CTX_free(ctx);
 }
 
 
@@ -464,6 +222,7 @@ int read_ws_frame(struct client_data *client, const unsigned char *frame, char *
     return 0;
 }
 
+
 int send_websocket_frame(struct client_data *client, const char *payload, size_t payload_len) {
 
     unsigned char frame_buf[BUFFER_SIZE];
@@ -483,7 +242,7 @@ int send_websocket_frame(struct client_data *client, const char *payload, size_t
     }
     else 
     {
-        printf("payload length: %d is not supported\n", payload_len);
+        printf("payload length: %ld is not supported\n", payload_len);
         return 1;
     }
 
@@ -494,4 +253,15 @@ int send_websocket_frame(struct client_data *client, const char *payload, size_t
     write(client->sockfd, frame_buf, msg_size);
 
     return 0;
+}
+
+
+void base64_encode(const unsigned char *input, size_t input_length, char *output)
+{
+    EVP_ENCODE_CTX *ctx = EVP_ENCODE_CTX_new();
+    int output_length;
+    EVP_EncodeInit(ctx);
+    EVP_EncodeUpdate(ctx, (unsigned char *)output, &output_length, input, input_length);
+    EVP_EncodeFinal(ctx, (unsigned char *)&output[output_length], &output_length);
+    EVP_ENCODE_CTX_free(ctx);
 }
