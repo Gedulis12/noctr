@@ -1,7 +1,7 @@
 # Compiler and flags
 CC := gcc
 CFLAGS := -Wall -Wextra -Iinclude
-LDFLAGS := -lcrypto -pthread
+LDFLAGS := -lcrypto -pthread -lsecp256k1
 
 # Source files
 SRCDIR := src
