@@ -1,5 +1,10 @@
+#ifndef EVENT
+#define EVENT
+
 #include <stddef.h>
 #include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
 
 struct nostr_event
 {
@@ -9,3 +14,5 @@ struct nostr_event
 };
 
 int validate_nostr_event(struct nostr_event);
+
+#endif

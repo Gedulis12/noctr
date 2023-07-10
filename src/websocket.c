@@ -173,7 +173,7 @@ int read_ws_frame(struct client_data *client, const unsigned char *frame, char *
         }
     }
     // if the payload length is >= 126 read the next two bits as the length
-    // we combine the bytes of frame[2] and frame[3] by byt-shifting frame[2] to the left by eight places and applying bitwise or with the frame[3]
+    // we combine the bytes of frame[2] and frame[3] by bit-shifting frame[2] to the left by eight places and applying bitwise or with the frame[3]
     else if ((frame[1] & 127) == 126)
     {
         ws_frame.payload_length = ((unsigned short)frame[2] << 8) | frame[3];
@@ -235,11 +235,12 @@ int send_websocket_frame(struct client_data *client, const char *payload, size_t
         offset = 2;
         frame_buf[1] = (char)payload_len;
     }
-    else if (payload_len > 126 && payload_len < (BUFFER_SIZE - 4))
+    else if (payload_len >= 126 && payload_len < (BUFFER_SIZE - 4))
     {
         offset = 4;
-        frame_buf[2] = (payload_len & 65280);
-        frame_buf[3] = (payload_len & 255);
+        frame_buf[1] = (char)126;
+        frame_buf[2] = payload_len & 65280;
+        frame_buf[3] = payload_len & 255;
     }
     else 
     {
