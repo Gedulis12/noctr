@@ -6,7 +6,7 @@ int validate_nostr_event(struct nostr_event event)
     int event_json_start;
     int event_sub_id_start;
     int event_filters_start;
-    int iterator;
+    int iterator, count;
     char *event_type;
     /*
     Clients can send 3 types of messages, which must be JSON arrays, according to the following patterns:
@@ -24,6 +24,9 @@ int validate_nostr_event(struct nostr_event event)
 
     */
     // Check if event data starts and ends with brackets [ and ]
+    
+
+    
     if (event.raw_event_data[0] != '[' ||
             event.raw_event_data[event.event_size] != ']')
     {
@@ -38,13 +41,24 @@ int validate_nostr_event(struct nostr_event event)
         return 1; // TODO return "NOTICE" event with debug message
     }
 
-    iterator = 0;
-    while(1)
+    // First get the length of event type keyword
+    iterator = (0 + event_type_kw_start);
+    count = 0;
+    while(event.raw_event_data[event_type_kw_start + iterator] != '"')
     {
-        if (event.raw_event_data[event_type_kw_start + iterator + 1] != '"')
-        {
-        }
+        count++;
+        iterator ++;
     }
 
+    // Next allocate memory for keyword and copy it it into the variable
+    event_type = malloc(count + 1);
+    for (int i = 1; i < count; i++)
+    {
+        strcpy(&event_type[i], &event.raw_event_data[event_type_kw_start + i]);
+    }
+    printf("DEBUG: %s\n", event_type);
+
+    
     return 0;
 }
+
