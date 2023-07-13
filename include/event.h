@@ -10,9 +10,11 @@ struct nostr_event
 {
     size_t event_size;
     char *raw_event_data;
-    unsigned char event_type; // 1 - "EVENT", 2 - "REQ", 3 - "CLOSE"
+    uint event_type; // EVENT = 1, REQ = 2, CLOSE = 3
 };
 
 int validate_nostr_event(struct nostr_event);
+int validate_event_json(struct nostr_event);
+int find_json_start_position(char *event_raw_data, int *json_start_position);
 
 #endif
