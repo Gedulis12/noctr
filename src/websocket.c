@@ -239,8 +239,9 @@ int send_websocket_frame(struct client_data *client, const char *payload, size_t
     {
         offset = 4;
         frame_buf[1] = (char)126;
-        frame_buf[2] = payload_len & 65280;
+        frame_buf[2] = (payload_len >> 8) & 255;
         frame_buf[3] = payload_len & 255;
+
     }
     else 
     {
