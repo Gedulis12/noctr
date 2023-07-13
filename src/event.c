@@ -6,7 +6,7 @@ int validate_nostr_event(struct nostr_event event)
     int event_json_start;
     int event_sub_id_start;
     int event_filters_start;
-    int iterator, count;
+    int count;
     char *event_type;
     /*
     Clients can send 3 types of messages, which must be JSON arrays, according to the following patterns:
@@ -24,41 +24,44 @@ int validate_nostr_event(struct nostr_event event)
 
     */
     // Check if event data starts and ends with brackets [ and ]
-    
 
     
+    char debug1 = event.raw_event_data[0];
+    char debug2 = event.raw_event_data[event.event_size];
+    printf("DEBUG opening/closing brackets: opening is - %c, closing is %c\n", event.raw_event_data[0], event.raw_event_data[event.event_size - 1]);
     if (event.raw_event_data[0] != '[' ||
-            event.raw_event_data[event.event_size] != ']')
+            event.raw_event_data[event.event_size - 1] != ']')
     {
+        printf("DEBUG error at bracket check\n");
         return 1; // TODO return "NOTICE" event with debug message
     }
-
     // Check if event includes the correct keywords, keywords must be in double quotes
-    event_type_kw_start = 1;
+    event_type_kw_start = 2;
 
-    if (event.raw_event_data[event_type_kw_start] != '"')
+    char debug = event.raw_event_data[event_type_kw_start - 1];
+    printf("DEBUG opening parantheses of event type: %c\n", debug);
+    if (event.raw_event_data[event_type_kw_start - 1] != '"')
     {
+        printf("DEBUG error at opening parantheses check\n");
         return 1; // TODO return "NOTICE" event with debug message
     }
 
     // First get the length of event type keyword
-    iterator = (0 + event_type_kw_start);
     count = 0;
-    while(event.raw_event_data[event_type_kw_start + iterator] != '"')
+    while(event.raw_event_data[event_type_kw_start + count] != '"')
     {
         count++;
-        iterator ++;
     }
 
     // Next allocate memory for keyword and copy it it into the variable
     event_type = malloc(count + 1);
-    for (int i = 1; i < count; i++)
+    for (int i = 0; i < count; i++)
     {
-        strcpy(&event_type[i], &event.raw_event_data[event_type_kw_start + i]);
+        event_type[i] = event.raw_event_data[event_type_kw_start + i];
     }
+    event_type[count] = '\0';
     printf("DEBUG: %s\n", event_type);
 
-    
     return 0;
 }
 

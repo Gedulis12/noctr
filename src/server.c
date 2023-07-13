@@ -53,6 +53,12 @@ void *handle_client(void *arg)
             }
             if (status == 0)
             {
+                struct nostr_event event;
+                event.event_size = strlen(ws_recv);
+                event.raw_event_data = malloc(event.event_size + 1);
+                strcpy(event.raw_event_data, ws_recv);
+                printf("DEBUG raw event data: %s\n", event.raw_event_data);
+                validate_nostr_event(event);
                 send_websocket_frame(client, ws_recv, strlen(ws_recv));
             }
         }
