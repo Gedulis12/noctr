@@ -4,6 +4,7 @@ int validate_nostr_event(struct nostr_event event)
 {
     uint event_type_kw_start = 2;
     int event_json_start;
+    int event_json_end;
     char *event_json;
     int event_sub_id_start;
     int event_filters_start;
@@ -98,6 +99,12 @@ int validate_nostr_event(struct nostr_event event)
                 return 1;
             }
             printf("DEBUG json curly brace starting position: %d\n", event_json_start);
+
+            if (find_json_end_position(event.raw_event_data, event_json_start, &event_json_end) != 0)
+            {
+                return 1;
+            }
+            printf("DEBUG json curly brace ending position: %d\n", event_json_end);
             break;
     }
 
@@ -108,6 +115,7 @@ int validate_nostr_event(struct nostr_event event)
 int find_json_start_position(char *event_raw_data, int *json_start_position)
 {
     char *event_type_string = "\"EVENT\",";
+    *json_start_position = 0;
     for (int i = 0; i < (strlen(event_raw_data) - strlen(event_type_string)); i++)
     {
         if (event_raw_data[strlen(event_type_string) + i] == '{')
@@ -124,6 +132,27 @@ int find_json_start_position(char *event_raw_data, int *json_start_position)
 
     return 0;
 }
+
+
+int find_json_end_position(char *event_raw_data, int json_start_position, int *json_end_position)
+{
+    *json_end_position = 0;
+    for (int i = strlen(event_raw_data); i > json_start_position; i--)
+    {
+        if (event_raw_data[i] == '}')
+        {
+            *json_end_position = i;
+        }
+    }
+
+    if (*json_end_position < 1)
+    {
+        printf("DEBUG error missing closing curly brace for event\n");
+        return 1; // TODO return "NOTICE" event with debug message
+    }
+    return 0;
+}
+
 
 int validate_event_json(struct nostr_event event)
 {
