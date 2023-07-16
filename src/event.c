@@ -10,22 +10,7 @@ int validate_nostr_event(struct nostr_event event)
     int event_filters_start;
     int count;
     char *event_type;
-    /*
-    Clients can send 3 types of messages, which must be JSON arrays, according to the following patterns:
 
-    ["EVENT", <event JSON as defined above>], used to publish events.
-    ["REQ", <subscription_id>, <filters JSON>...], used to request events and subscribe to new updates.
-    ["CLOSE", <subscription_id>], used to stop previous subscriptions.
-
-    <subscription_id> is an arbitrary, non-empty string of max length 64 chars, that should be used to represent a subscription.
-
-    <filters> is a JSON object that determines what events will be sent in that subscription, it can have the following attributes:
-
-    TODO:
-    for EVENT type check if all the data is inside {}, check if all of the required data is present and in the correct format, validate the event signature;
-
-    */
-    //
     // Check if event data starts and ends with brackets [ and ]
     printf("DEBUG opening/closing brackets: opening is - %c, closing is %c\n", event.raw_event_data[0], event.raw_event_data[event.event_size - 1]);
     if (event.raw_event_data[0] != '[' ||
@@ -96,18 +81,35 @@ int validate_nostr_event(struct nostr_event event)
         case 1:
             if (find_json_start_position(event.raw_event_data, &event_json_start) != 0)
             {
-                return 1;
+                return 1; // TODO return "NOTICE" event with debug message
             }
             printf("DEBUG json curly brace starting position: %d\n", event_json_start);
 
             if (find_json_end_position(event.raw_event_data, event_json_start, &event_json_end) != 0)
             {
-                return 1;
+                return 1; // TODO return "NOTICE" event with debug message
             }
             printf("DEBUG json curly brace ending position: %d\n", event_json_end);
+
+            event_json = malloc((event_json_end - event_json_start + 2));
+            event_json[sizeof(event_json)] = '\0';
+
+            for (int i = 0; i < (event_json_end - event_json_start + 1); i++)
+            {
+                event_json[i] = event.raw_event_data[event_json_start + i];
+            }
+
+            if (validate_event_json(event_json) != 0)
+            {
+                return 1; // TODO return "NOTICE" event with debug message
+            }
+
+            free(event_json);
+
             break;
     }
 
+    free(event_type);
     return 0;
 }
 
@@ -154,7 +156,33 @@ int find_json_end_position(char *event_raw_data, int json_start_position, int *j
 }
 
 
-int validate_event_json(struct nostr_event event)
+int validate_event_json(char *event_json)
 {
+    struct event_elements
+    {
+        char *key_string;
+        int key_string_pos;
+        int key_string_valid;
+    };
+
+    struct event_elements id;
+    struct event_elements pubkey;
+    struct event_elements created_at;
+    struct event_elements kind;
+    struct event_elements tags;
+    struct event_elements content;
+    struct event_elements sig;
+
+
+    char *id_string = "\"id\":";
+    char *pubkey_string = "\"pubkey\":";
+    char *created_at_string = "\"created_at\":";
+    char *kind_string = "\"kind\":";
+    char *tags_string = "\"tags\":";
+    char *content_string = "\"content\":";
+    char *sig_string = "\"sig\":";
+    printf("DEBUG validating event json: %s\n", event_json);
+
+    
     return 0;
 }
