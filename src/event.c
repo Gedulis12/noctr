@@ -158,31 +158,84 @@ int find_json_end_position(char *event_raw_data, int json_start_position, int *j
 
 int validate_event_json(char *event_json)
 {
-    struct event_elements
-    {
-        char *key_string;
-        int key_string_pos;
-        int key_string_valid;
-    };
+    const char *id_key = "\"id\":";
+    const char *pubkey_key = "\"pubkey\":";
+    const char *created_at_key = "\"created_at\":";
+    const char *kind_key = "\"kind\":";
+    const char *tags_key = "\"tags\":";
+    const char *content_key = "\"content\":";
+    const char *sig_key = "\"sig\":";
 
-    struct event_elements id;
-    struct event_elements pubkey;
-    struct event_elements created_at;
-    struct event_elements kind;
-    struct event_elements tags;
-    struct event_elements content;
-    struct event_elements sig;
+    int id_key_pos;
+    int pubkey_key_pos;
+    int created_at_key_pos;
+    int kind_key_pos;
+    int tags_key_pos;
+    int content_key_pos;
+    int sig_key_pos;
 
+    int id_value_start_pos;
+    int pubkey_start_key_pos;
+    int created_at_value_start_pos;
+    int kind_value_start_pos;
+    int tags_value_start_pos;
+    int content_value_start_pos;
+    int sig_value_start_pos;
 
-    char *id_string = "\"id\":";
-    char *pubkey_string = "\"pubkey\":";
-    char *created_at_string = "\"created_at\":";
-    char *kind_string = "\"kind\":";
-    char *tags_string = "\"tags\":";
-    char *content_string = "\"content\":";
-    char *sig_string = "\"sig\":";
+    const int id_value_len = 32;
+    const int pubkey_value_len = 32;
+    const int sig_value_len = 64;
+
     printf("DEBUG validating event json: %s\n", event_json);
 
-    
+    if ((id_key_pos = get_substring_pos(event_json, (char *)id_key)) == 0)
+    {
+        printf("DEBUG error: id key not found in event json\n");
+        return 1; // TODO return "NOTICE" event with debug message
+    }
+    printf("DEBUG beginning position of 'id' key in event json is: %d\n", id_key_pos);
+
+    if ((pubkey_key_pos = get_substring_pos(event_json, (char *)pubkey_key)) == 0)
+    {
+        printf("DEBUG error: pubkey key not found in event json\n");
+        return 1; // TODO return "NOTICE" event with debug message
+    }
+    printf("DEBUG beginning position of 'pubkey' key in event json is: %d\n", pubkey_key_pos);
+
+    if ((created_at_key_pos = get_substring_pos(event_json, (char *)created_at_key)) == 0)
+    {
+        printf("DEBUG error: created_at key not found in event json\n");
+        return 1; // TODO return "NOTICE" event with debug message
+    }
+    printf("DEBUG beginning position of 'created_at' key in event json is: %d\n", created_at_key_pos);
+
+    if ((kind_key_pos = get_substring_pos(event_json, (char *)kind_key)) == 0)
+    {
+        printf("DEBUG error: kind key not found in event json\n");
+        return 1; // TODO return "NOTICE" event with debug message
+    }
+    printf("DEBUG beginning position of 'kind' key in event json is: %d\n", kind_key_pos);
+
+    if ((tags_key_pos = get_substring_pos(event_json, (char *)tags_key)) == 0)
+    {
+        return 1; // TODO return "NOTICE" event with debug message
+        printf("DEBUG error: tags key not found in event json\n");
+    }
+    printf("DEBUG beginning position of 'tags' key in event json is: %d\n", tags_key_pos);
+
+    if ((content_key_pos = get_substring_pos(event_json, (char *)content_key)) == 0)
+    {
+        printf("DEBUG error: content key not found in event json\n");
+        return 1; // TODO return "NOTICE" event with debug message
+    }
+    printf("DEBUG beginning position of 'content' key in event json is: %d\n", content_key_pos);
+
+    if ((sig_key_pos = get_substring_pos(event_json, (char *)sig_key)) == 0)
+    {
+        printf("DEBUG error: sig key not found in event json\n");
+        return 1; // TODO return "NOTICE" event with debug message
+    }
+    printf("DEBUG beginning position of 'sig' key in event json is: %d\n", sig_key_pos);
+
     return 0;
 }

@@ -32,3 +32,15 @@ int hex_to_bin(const char* hex_string, unsigned char* bin_data, size_t bin_size)
 
     return 0; // Success
 }
+
+int get_substring_pos(char *src_string, char *substring)
+{
+    const char *substring_ptr = strstr(src_string, substring);
+    if (!substring_ptr)
+    {
+        return 0;
+    }
+    int substring_pos = substring_ptr - src_string;
+
+    return substring_pos;
+}
