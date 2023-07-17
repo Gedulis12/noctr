@@ -175,19 +175,28 @@ int validate_event_json(char *event_json)
     int sig_key_pos;
 
     int id_value_start_pos;
-    int pubkey_start_key_pos;
+    int pubkey_value_start_pos;
     int created_at_value_start_pos;
     int kind_value_start_pos;
     int tags_value_start_pos;
     int content_value_start_pos;
     int sig_value_start_pos;
 
-    const int id_value_len = 32;
-    const int pubkey_value_len = 32;
-    const int sig_value_len = 64;
+    int id_value_end_pos;
+    int pubkey_value_end_pos;
+    int created_at_value_end_pos;
+    int kind_value_end_pos;
+    int tags_value_end_pos;
+    int content_value_end_pos;
+    int sig_value_end_pos;
+
+    const int id_value_len = 32 * 2;
+    const int pubkey_value_len = 32 * 2;
+    const int sig_value_len = 64 * 2;
 
     printf("DEBUG validating event json: %s\n", event_json);
 
+    // Get starting positions of each JSON key
     if ((id_key_pos = get_substring_pos(event_json, (char *)id_key)) == 0)
     {
         printf("DEBUG error: id key not found in event json\n");
@@ -236,6 +245,168 @@ int validate_event_json(char *event_json)
         return 1; // TODO return "NOTICE" event with debug message
     }
     printf("DEBUG beginning position of 'sig' key in event json is: %d\n", sig_key_pos);
+
+    // Check if value for id has opening parantheses and get it's position
+    for (int i = 0; i < strlen(event_json) - id_key_pos + strlen(id_key); i++)
+    {
+        if (event_json[id_key_pos + strlen(id_key) + i] == '"')
+        {
+            id_value_start_pos = id_key_pos + strlen(id_key) + i;
+            break;
+        }
+        else if (event_json[id_key_pos + strlen(id_key) + i] == ' ' || event_json[id_key_pos + strlen(id_key) + i] == '\n' )
+        {
+            continue;
+        }
+        else
+        {
+            printf("DEBUG error: id value does not begin with \" in event json\n");
+            return 1; // TODO return "NOTICE" event with debug message
+        }
+    }
+
+    // Check if value for id has opening and closing parantheses and get it's positions
+    for (int i = 0; i < strlen(event_json) - id_key_pos + strlen(id_key); i++)
+    {
+        if (event_json[id_key_pos + strlen(id_key) + i] == '"')
+        {
+            id_value_start_pos = id_key_pos + strlen(id_key) + i;
+            break;
+        }
+        else if (event_json[id_key_pos + strlen(id_key) + i] == ' ' || event_json[id_key_pos + strlen(id_key) + i] == '\n' )
+        {
+            continue;
+        }
+        else
+        {
+            printf("DEBUG error: id value does not begin with \" in event json\n");
+            return 1; // TODO return "NOTICE" event with debug message
+        }
+    }
+    printf("DEBUG beginning position of 'id' value in event json is: %d\n", id_value_start_pos);
+
+    id_value_end_pos = id_value_start_pos + id_value_len + 1;
+    printf("DEBUG end position of 'id' value in event json is: %d\n", id_value_end_pos);
+
+    if (event_json[id_value_end_pos] != '"')
+    {
+        printf("DEBUG error: id value does not end with \" in event json\n");
+        return 1; // TODO return "NOTICE" event with debug message
+    }
+
+    // Check if value for pubkey has opening and closing parantheses and get it's positions
+    for (int i = 0; i < strlen(event_json) - pubkey_key_pos + strlen(pubkey_key); i++)
+    {
+        if (event_json[pubkey_key_pos + strlen(pubkey_key) + i] == '"')
+        {
+            pubkey_value_start_pos = pubkey_key_pos + strlen(pubkey_key) + i;
+            break;
+        }
+        else if (event_json[pubkey_key_pos + strlen(pubkey_key) + i] == ' ' || event_json[pubkey_key_pos + strlen(pubkey_key) + i] == '\n' )
+        {
+            continue;
+        }
+        else
+        {
+            printf("DEBUG error: pubkey value does not begin with \" in event json\n");
+            return 1; // TODO return "NOTICE" event with debug message
+        }
+    }
+    printf("DEBUG beginning position of 'pubkey' value in event json is: %d\n", pubkey_value_start_pos);
+
+    pubkey_value_end_pos = pubkey_value_start_pos + pubkey_value_len + 1;
+    printf("DEBUG end position of 'pubkey' value in event json is: %d\n", pubkey_value_end_pos);
+
+    if (event_json[pubkey_value_end_pos] != '"')
+    {
+        printf("DEBUG error: pubkey value does not end with \" in event json\n");
+        return 1; // TODO return "NOTICE" event with debug message
+    }
+
+    // Check if value for content has opening and closing parantheses and get it's positions
+    for (int i = 0; i < strlen(event_json) - content_key_pos + strlen(content_key); i++)
+    {
+        if (event_json[content_key_pos + strlen(content_key) + i] == '"')
+        {
+            content_value_start_pos = content_key_pos + strlen(content_key) + i;
+            break;
+        }
+        else if (event_json[content_key_pos + strlen(content_key) + i] == ' ' || event_json[content_key_pos + strlen(content_key) + i] == '\n' )
+        {
+            continue;
+        }
+        else
+        {
+            printf("DEBUG error: content value does not begin with \" in event json\n");
+            return 1; // TODO return "NOTICE" event with debug message
+        }
+    }
+    printf("DEBUG beginning position of 'content' value in event json is: %d\n", content_value_start_pos);
+
+    // Check if value for sig has opening and closing parantheses and get it's positions
+    for (int i = 0; i < strlen(event_json) - sig_key_pos + strlen(sig_key); i++)
+    {
+        if (event_json[sig_key_pos + strlen(sig_key) + i] == '"')
+        {
+            sig_value_start_pos = sig_key_pos + strlen(sig_key) + i;
+            break;
+        }
+        else if (event_json[sig_key_pos + strlen(sig_key) + i] == ' ' || event_json[sig_key_pos + strlen(sig_key) + i] == '\n' )
+        {
+            continue;
+        }
+        else
+        {
+            printf("DEBUG error: sig value does not begin with \" in event json\n");
+            return 1; // TODO return "NOTICE" event with debug message
+        }
+    }
+    printf("DEBUG beginning position of 'sig' value in event json is: %d\n", sig_value_start_pos);
+
+    sig_value_end_pos = sig_value_start_pos + sig_value_len + 1;
+    printf("DEBUG end position of 'sig' value in event json is: %d\n", sig_value_end_pos);
+
+    if (event_json[sig_value_end_pos] != '"')
+    {
+        printf("DEBUG error: sig value does not end with \" in event json\n");
+        return 1; // TODO return "NOTICE" event with debug message
+    }
+
+    return 0;
+}
+
+//TODO:
+// use this function to instead of current check for value beggining/ends, 
+// add condition so that if constant length is null, we would search for the closing parantheses and derive the value length that way
+int find_json_value_positions_by_key(char *event_json, char *key_string, int key_start_position, int *value_start_position, int *value_end_position, int value_constant_length)
+{
+    for (int i = 0; i < strlen(event_json) - key_start_position + strlen(key_string); i++)
+    {
+        if (event_json[key_start_position + strlen(key_string) + i] == '"')
+        {
+            *value_start_position = key_start_position + strlen(key_string) + i;
+            break;
+        }
+        else if (event_json[key_start_position + strlen(key_string) + i] == ' ' || event_json[key_start_position + strlen(key_string) + i] == '\n' )
+        {
+            continue;
+        }
+        else
+        {
+            printf("DEBUG error: sig value does not begin with \" in event json\n");
+            return 1; // TODO return "NOTICE" event with debug message
+        }
+    }
+    printf("DEBUG beginning position of 'sig' value in event json is: %d\n", *value_start_position);
+
+    *value_end_position = *value_start_position + value_constant_length + 1;
+    printf("DEBUG end position of 'sig' value in event json is: %d\n", *value_end_position);
+
+    if (event_json[*value_end_position] != '"')
+    {
+        printf("DEBUG error: sig value does not end with \" in event json\n");
+        return 1; // TODO return "NOTICE" event with debug message
+    }
 
     return 0;
 }

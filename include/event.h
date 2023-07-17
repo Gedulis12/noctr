@@ -18,5 +18,6 @@ int validate_nostr_event(struct nostr_event);
 int validate_event_json(char *event_json);
 int find_json_start_position(char *event_raw_data, int *json_start_position);
 int find_json_end_position(char *event_raw_data, int json_start_position, int *json_end_position);
+int find_json_value_positions_by_key(char *event_json, char *key_string, int key_start_position, int *value_start_position, int *value_end_position, int value_constant_length);
 
 #endif
